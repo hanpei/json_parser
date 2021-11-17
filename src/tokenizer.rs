@@ -1,6 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
-use crate::error::JsonError;
+use crate::{JsonResult, error::JsonError};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -15,8 +15,6 @@ pub enum Token {
     Boolen(bool),   // "true/false"
     Null,           // "null"
 }
-
-pub type JsonResult<T> = Result<T, JsonError>;
 
 #[derive(Debug)]
 pub struct Tokenizer<'a> {
@@ -86,10 +84,9 @@ impl<'a> Tokenizer<'a> {
                 _ => break,
             }
         }
-        if let v = value.parse::<f64>() {
-            Ok(v.unwrap())
-        } else {
-            Err(JsonError::UnexpectedToken("wrong number".to_string()))
+        match value.parse::<f64>() {
+            Ok(v) => Ok(v),
+            Err(_e) => Err(JsonError::UnexpectedToken("wrong number".to_string())),
         }
     }
 

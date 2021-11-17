@@ -1,9 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use crate::{
     error::JsonError,
-    tokenizer::{JsonResult, Token, Tokenizer},
+    tokenizer::{Token, Tokenizer},
     value::JsonValue,
+    JsonResult,
 };
 
 struct Parser<'a> {
