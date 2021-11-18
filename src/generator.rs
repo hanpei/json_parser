@@ -1,6 +1,5 @@
+use crate::{error::JsonError, value::JsonValue};
 use std::collections::BTreeMap;
-
-use crate::value::JsonValue;
 
 // r#"
 //     {
@@ -15,6 +14,15 @@ use crate::value::JsonValue;
 //         }
 //     }
 // "#
+
+pub fn stringify<T>(input: T) -> String
+where
+    T: Into<JsonValue>,
+{
+    let mut gen = Generator::new(true, 4);
+    gen.write_json(&input.into());
+    gen.value()
+}
 
 enum Tab {
     Right,
@@ -50,7 +58,7 @@ impl Generator {
                 true => self.write("true"),
                 false => self.write("false"),
             },
-            JsonValue::String(s) => self.write(s),
+            JsonValue::String(s) => self.write(&format!("{:?}", s)),
             JsonValue::Number(n) => self.write(n.to_string().as_str()),
             JsonValue::Array(array) => self.write_array(array),
             JsonValue::Object(object) => self.write_object(object),
@@ -108,8 +116,12 @@ impl Generator {
                 self.new_line(Tab::Right);
             } else {
                 self.write(",");
+                if !self.minify {
+                    self.write(" ");
+                };
+
                 self.new_line(Tab::Stay);
-            }
+            };
             self.write_json(item);
         }
 
@@ -117,15 +129,42 @@ impl Generator {
         self.write("]");
     }
 
-    fn write_object(&self, object: &BTreeMap<String, JsonValue>) {
-        todo!()
+    // {
+    //     key: value,
+    //     abc: {
+    //              123
+    //          },
+    // }
+    fn write_object(&mut self, object: &BTreeMap<String, JsonValue>) {
+        let mut first = true;
+        self.write("{");
+
+        for (key, value) in object.iter() {
+            if first {
+                first = false;
+                self.new_line(Tab::Right);
+            } else {
+                self.write(",");
+                self.new_line(Tab::Stay);
+            };
+            self.write(&format!("{:?}", key));
+            self.write(":");
+            if !self.minify {
+                self.write(" ");
+            };
+            self.write_json(value);
+        }
+        self.new_line(Tab::Left);
+        self.write("}");
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::prelude::OsStringExt;
+
     use super::*;
-    use crate::parse;
+    use crate::{array, object, parse};
 
     #[test]
     fn temp() {
@@ -153,12 +192,54 @@ mod tests {
     }
 
     #[test]
-    fn gen_array() {
+    fn write_array() {
         let mut gen = Generator::new(false, 4);
         let str = r#"[ 1, 2, 3, "a", [ "b", "c" ] ]"#;
         let json = parse(str).unwrap();
         gen.write_json(&json);
         let ret = gen.value();
         println!("stringify\n {}", ret);
+    }
+
+    #[test]
+    fn write_object() {
+        let mut gen = Generator::new(false, 4);
+        let str = r#"{
+    "a": "abc",
+    "b": 123,
+    "more": {
+        "phone": null
+    }
+}"#;
+
+        let json = object! {
+            "a"=>"abc",
+            "b"=>123,
+            "more"=> object! {
+                "phone"=>JsonValue::Null
+            }
+        };
+        gen.write_json(&json);
+        let ret = gen.value();
+        println!("json\n {:?}", json);
+        println!("stringify\n {}", ret);
+        println!("str\n {}", str);
+        assert_eq!(ret, str);
+    }
+
+    #[test]
+    fn test_stringify() {
+        let json = object! {
+            "code"=>200,
+            "success"=>true,
+            "payload"=>object!{
+                "features"=>array!["awesfome   fasfaf  ","easyAPI  ","lowLearningCurve"]
+            }
+        };
+        let s = r#"{"code":200,"payload":{"features":["awesfome   fasfaf  ","easyAPI  ","lowLearningCurve"]},"success":true}"#;
+        
+        let ret = stringify(json);
+        println!("stringify {}", ret);
+        assert_eq!(ret, s);
     }
 }
