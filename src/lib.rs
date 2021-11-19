@@ -7,5 +7,6 @@ mod generator;
 
 use error::JsonError;
 
-pub use parser::parse;
 pub type JsonResult<T> = Result<T, JsonError>;
+pub use parser::parse;
+pub use generator::stringify;

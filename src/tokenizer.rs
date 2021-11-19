@@ -1,6 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
-use crate::{JsonResult, error::JsonError};
+use crate::{error::JsonError, JsonResult};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -31,7 +31,7 @@ impl<'a> Tokenizer<'a> {
                 ']' => Token::BracketOff,
                 '{' => Token::BraceOn,
                 '}' => Token::BraceOff,
-                '0'..='9' => Token::Number(self.read_number(ch)?),
+                '0'..='9' | '-' => Token::Number(self.read_number(ch)?),
                 '"' => Token::String(self.read_string(ch)),
                 't' | 'f' | 'n' => {
                     let symbol = self.read_symbol(ch);
@@ -66,11 +66,28 @@ impl<'a> Tokenizer<'a> {
     fn read_number(&mut self, ch: char) -> JsonResult<f64> {
         let mut value = ch.to_string();
         let mut point = false;
+        let mut has_e = false;
         while let Some(&n) = self.source.peek() {
             match n {
                 '0'..='9' => {
                     value.push(n);
                     self.source.next();
+                }
+                'e' | 'E' => {
+                    if !has_e {
+                        has_e = true;
+                        value.push(n);
+                        self.source.next();
+
+                        match self.source.peek().unwrap() {
+                            '-' | '+' => {
+                                value.push(self.source.next().unwrap());
+                            }
+                            _ => continue,
+                        }
+                    } else {
+                        break;
+                    }
                 }
                 '.' => {
                     if !point {
@@ -179,6 +196,15 @@ mod tests {
         }
         assert_eq!(ret, 123.4);
     }
+    #[test]
+    fn read_number_minus() {
+        let mut str = Tokenizer::new("-123.4");
+        let mut ret = 0.0;
+        while let Some(s) = str.source.next() {
+            ret = str.read_number(s).unwrap();
+        }
+        assert_eq!(ret, -123.4);
+    }
 
     #[test]
     #[should_panic]
@@ -189,6 +215,27 @@ mod tests {
             ret = str.read_number(s).unwrap();
         }
         assert_eq!(ret, 123.4);
+    }
+
+    mod number {
+        use super::super::*;
+        #[test]
+        fn exponent() {
+            let mut a = Tokenizer::new("1.8123e2");
+            let mut b = Tokenizer::new("-1.8123e2");
+            let mut c = Tokenizer::new("1.8123e-2");
+            let mut d = Tokenizer::new("-1.8123e-2");
+            let mut ret = 0.0;
+
+            // while let Some(s) = a.source.next() {
+            //     ret = a.read_number(s).unwrap();
+            // }
+
+            assert_eq!(a.next().unwrap(), Token::Number(181.23));
+            assert_eq!(b.next().unwrap(), Token::Number(-181.23));
+            assert_eq!(c.next().unwrap(), Token::Number(0.018123));
+            assert_eq!(d.next().unwrap(), Token::Number(-0.018123));
+        }
     }
 
     #[test]

@@ -69,16 +69,6 @@ impl Generator {
         self.code.push_str(s);
     }
 
-    // fn indent(&mut self) {
-    //     self.dent += 1;
-    // }
-
-    // fn dedent(&mut self) {
-    //     if self.dent > 0 {
-    //         self.dent -= 1;
-    //     }
-    // }
-
     fn ln(&mut self) {
         self.code.push('\n')
     }
