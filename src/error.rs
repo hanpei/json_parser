@@ -1,12 +1,13 @@
 use crate::tokenizer::Token;
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub enum JsonError {
     UnexpectedToken(String),
     UnexpectedEndOfJson,
     InvalidType(String),
     UndefinedField(String),
     UnexpectedCharacter(char),
+    InvalidNumber,
 }
 
 impl JsonError {

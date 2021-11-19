@@ -144,10 +144,10 @@ mod tests {
         // let s = r#"[1,"foo",[3, 4]]"#;
         let s = r#"["a", "b", "c", 1, 2, 3, null, true, false]"#;
         let mut source = Parser::new(s);
-        let ret = source.value().unwrap();
+        let ret = source.value();
+        println!("{:?}", ret);
 
         let a = array!["a", "b", "c", 1, 2, 3, JsonValue::Null, true, false];
-        assert_eq!(a, ret);
         assert_eq!(a, parse(s).unwrap())
     }
 

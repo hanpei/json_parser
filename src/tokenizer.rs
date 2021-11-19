@@ -86,7 +86,7 @@ impl<'a> Tokenizer<'a> {
                             _ => continue,
                         }
                     } else {
-                        break;
+                        return Err(JsonError::InvalidNumber);
                     }
                 }
                 '.' => {
@@ -95,7 +95,7 @@ impl<'a> Tokenizer<'a> {
                         value.push(n);
                         self.source.next();
                     } else {
-                        break;
+                        return Err(JsonError::InvalidNumber);
                     }
                 }
                 _ => break,
@@ -103,7 +103,7 @@ impl<'a> Tokenizer<'a> {
         }
         match value.parse::<f64>() {
             Ok(v) => Ok(v),
-            Err(_e) => Err(JsonError::UnexpectedToken("wrong number".to_string())),
+            Err(_e) => Err(JsonError::InvalidNumber),
         }
     }
 
@@ -168,64 +168,52 @@ mod tests {
 
     #[test]
     fn read_string() {
-        let mut str = Tokenizer::new(r#""abc n123 ""#);
-
-        let mut ret = String::new();
-        while let Some(s) = str.source.next() {
-            ret = str.read_string(s);
-        }
-        assert_eq!(ret, "abc n123 ");
+        let mut t = Tokenizer::new(r#" "abc def   "  "#);
+        let ret = t.next().unwrap();
+        assert_eq!(Token::String("abc def   ".to_string()), ret);
     }
 
     #[test]
     fn read_symbol() {
-        let mut str = Tokenizer::new("true");
-        let mut ret = String::new();
-        while let Some(s) = str.source.next() {
-            ret = str.read_symbol(s);
-        }
-        assert_eq!(ret, "true");
-    }
-
-    #[test]
-    fn read_number() {
-        let mut str = Tokenizer::new("123.4");
-        let mut ret = 0.0;
-        while let Some(s) = str.source.next() {
-            ret = str.read_number(s).unwrap();
-        }
-        assert_eq!(ret, 123.4);
-    }
-    #[test]
-    fn read_number_minus() {
-        let mut str = Tokenizer::new("-123.4");
-        let mut ret = 0.0;
-        while let Some(s) = str.source.next() {
-            ret = str.read_number(s).unwrap();
-        }
-        assert_eq!(ret, -123.4);
-    }
-
-    #[test]
-    #[should_panic]
-    fn read_number_parse_err() {
-        let mut str = Tokenizer::new("1v23.4x");
-        let mut ret = 0.0;
-        while let Some(s) = str.source.next() {
-            ret = str.read_number(s).unwrap();
-        }
-        assert_eq!(ret, 123.4);
+        let mut t = Tokenizer::new("true");
+        let mut f = Tokenizer::new("false");
+        let mut n = Tokenizer::new("null");
+        assert_eq!(Token::Boolen(true), t.next().unwrap());
+        assert_eq!(Token::Boolen(false), f.next().unwrap());
+        assert_eq!(Token::Null, n.next().unwrap());
     }
 
     mod number {
         use super::super::*;
+
+        #[test]
+        fn read_number() {
+            assert_eq!(Tokenizer::new("11").next().unwrap(), Token::Number(11.0));
+            assert_eq!(
+                Tokenizer::new("123.4").next().unwrap(),
+                Token::Number(123.4)
+            );
+            assert_eq!(
+                Tokenizer::new("-123.40").next().unwrap(),
+                Token::Number(-123.4)
+            );
+        }
+
+        #[test]
+        fn read_number_err() {
+            let mut a = Tokenizer::new("1.23.4");
+            let mut b = Tokenizer::new("1.23e23e");
+            let expected = JsonError::InvalidNumber;
+            assert_eq!(expected, a.next().err().unwrap());
+            assert_eq!(expected, b.next().err().unwrap());
+        }
+
         #[test]
         fn exponent() {
-            let mut a = Tokenizer::new("1.8123e2");
+            let mut a = Tokenizer::new("1.8123E2");
             let mut b = Tokenizer::new("-1.8123e2");
             let mut c = Tokenizer::new("1.8123e-2");
             let mut d = Tokenizer::new("-1.8123e-2");
-            let mut ret = 0.0;
 
             // while let Some(s) = a.source.next() {
             //     ret = a.read_number(s).unwrap();
@@ -239,35 +227,28 @@ mod tests {
     }
 
     #[test]
-    fn iterator() {
-        let s = r#",     :[]{} true false null"#;
+    fn iter() {
+        let s = r#",     :[]{} true false null 123 33a"#;
         let mut t = Tokenizer::new(s);
-        let mut next = t.next().unwrap();
-        assert_eq!(Token::Comma, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::Colon, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::BracketOn, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::BracketOff, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::BraceOn, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::BraceOff, next);
-        next = t.next().unwrap();
-        assert_eq!(Token::Boolen(true), next);
-        next = t.next().unwrap();
-        assert_eq!(Token::Boolen(false), next);
-        next = t.next().unwrap();
-        assert_eq!(Token::Null, next);
+        assert_eq!(Token::Comma, t.next().unwrap());
+        assert_eq!(Token::Colon, t.next().unwrap());
+        assert_eq!(Token::BracketOn, t.next().unwrap());
+        assert_eq!(Token::BracketOff, t.next().unwrap());
+        assert_eq!(Token::BraceOn, t.next().unwrap());
+        assert_eq!(Token::BraceOff, t.next().unwrap());
+        assert_eq!(Token::Boolen(true), t.next().unwrap());
+        assert_eq!(Token::Boolen(false), t.next().unwrap());
+        assert_eq!(Token::Null, t.next().unwrap());
+        assert_eq!(Token::Number(123.0), t.next().unwrap());
+        assert_eq!(Token::Number(33.0), t.next().unwrap());
     }
 
     #[test]
-    #[should_panic]
     fn iter_error() {
         let s = r#"tru"#;
         let mut t = Tokenizer::new(s);
-        let next = t.next().unwrap();
-        assert_eq!(Token::Comma, next);
+        let result = t.next().err().unwrap();
+        let expected = JsonError::UnexpectedToken("tru".to_string());
+        assert_eq!(expected, result);
     }
 }
