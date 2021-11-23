@@ -1,6 +1,8 @@
+use std::fmt::Error;
+
 use crate::tokenizer::Token;
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum JsonError {
     UnexpectedToken(String),
     UnexpectedEndOfJson,
@@ -8,6 +10,7 @@ pub enum JsonError {
     UndefinedField(String),
     UnexpectedCharacter(char),
     InvalidNumber,
+    ParsingFailed(String),
 }
 
 impl JsonError {
@@ -21,5 +24,13 @@ impl JsonError {
 
     pub fn undefined_field(field: String) -> Self {
         JsonError::UndefinedField(field.into())
+    }
+
+    pub fn unexpected_character(byte: u8) -> Self {
+        JsonError::UnexpectedCharacter(char::from_u32(byte as u32).unwrap_or('?'))
+    }
+
+    pub fn parsing_faild(err: String) -> Self {
+        JsonError::ParsingFailed(err)
     }
 }

@@ -151,7 +151,6 @@ impl Generator {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::prelude::OsStringExt;
 
     use super::*;
     use crate::{array, object, parse};
