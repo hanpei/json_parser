@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use crate::tokenizer::Token;
 
 #[derive(Debug, PartialEq)]
@@ -30,7 +28,7 @@ impl JsonError {
         JsonError::UnexpectedCharacter(char::from_u32(byte as u32).unwrap_or('?'))
     }
 
-    pub fn parsing_faild(err: String) -> Self {
-        JsonError::ParsingFailed(err)
+    pub fn parsing_faild(err: &str) -> Self {
+        JsonError::ParsingFailed(err.to_string())
     }
 }

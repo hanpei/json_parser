@@ -1,4 +1,4 @@
-use crate::{error::JsonError, value::JsonValue};
+use crate::value::JsonValue;
 use std::collections::BTreeMap;
 
 // r#"
@@ -47,18 +47,18 @@ impl Generator {
         }
     }
 
-    fn value(self) -> String {
+    pub fn value(self) -> String {
         self.code
     }
 
-    fn write_json(&mut self, json: &JsonValue) {
+    pub fn write_json(&mut self, json: &JsonValue) {
         match json {
             JsonValue::Null => self.write("null"),
             JsonValue::Boolen(b) => match b {
                 true => self.write("true"),
                 false => self.write("false"),
             },
-            JsonValue::String(s) => self.write(&format!("{:?}", s)),
+            JsonValue::String(s) => self.write_string(s),
             JsonValue::Number(n) => self.write(n.to_string().as_str()),
             JsonValue::Array(array) => self.write_array(array),
             JsonValue::Object(object) => self.write_object(object),
@@ -89,6 +89,27 @@ impl Generator {
                 self.write(" ");
             }
         }
+    }
+
+    fn write_string(&mut self, s: &String) {
+        self.write("\"");
+
+        for ch in s.chars() {
+            match ch {
+                '\\' | '"' => {
+                    self.write("\\");
+                    self.write(&ch.to_string());
+                }
+                '\n' => self.write("\\n"),
+                '\r' => self.write("\\r"),
+                '\t' => self.write("\\t"),
+                '\u{000C}' => self.write("\\f"),
+                '\u{0008}' => self.write("\\b"),
+                _ => self.write(&ch.to_string()),
+            }
+        }
+
+        self.write("\"");
     }
 
     // [1,2,3]
@@ -151,14 +172,8 @@ impl Generator {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::{array, object, parse};
-
-    #[test]
-    fn temp() {
-        println!("{}", u8::MAX);
-    }
 
     #[test]
     fn indent_spaces() {
@@ -226,9 +241,43 @@ mod tests {
             }
         };
         let s = r#"{"code":200,"payload":{"features":["awesfome   fasfaf  ","easyAPI  ","lowLearningCurve"]},"success":true}"#;
-        
+
         let ret = stringify(json);
         println!("stringify {}", ret);
         assert_eq!(ret, s);
+    }
+
+    #[test]
+    fn write_escaped_string() {
+        let json = r#" "\u67e5" "#;
+        let obj = parse(&json).unwrap();
+        println!("{:?}", obj);
+    }
+
+    #[test]
+    fn stringify_escaped_characters() {
+        assert_eq!(stringify("\r\n\t\u{8}\u{c}\\\""), r#""\r\n\t\b\f\\\"""#);
+    }
+
+    #[test]
+    fn parse_escaped_unicode() {
+        let data = parse(r#" "\u2764\ufe0f\t\n\n\n\n" "#).unwrap();
+
+        println!("{}", data);
+    }
+
+    #[test]
+    fn parse_escaped_unicode_surrogate() {
+        let data = parse(r#" "\uD834\uDD1E" "#).unwrap();
+        println!("{}", data);
+    }
+
+    #[test]
+    fn temp() {
+        let vec = &mut [0;4];
+        let a = '𝄞'.encode_utf8(vec).as_bytes();
+        println!("{:?}", a);
+    
+        // println!("{}", '❤'.escape_unicode());
     }
 }

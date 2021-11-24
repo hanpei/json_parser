@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Display};
+
+use crate::generator::Generator;
+
 
 #[derive(Debug, PartialEq)]
 pub enum JsonValue {
@@ -8,6 +11,26 @@ pub enum JsonValue {
     Number(f64),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
+}
+
+impl JsonValue {
+    pub fn dump(&self) -> String {
+        let mut gen = Generator::new(true, 0);
+        gen.write_json(self);
+        gen.value()
+    }
+}
+
+impl Display for JsonValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            JsonValue::String(ref value)  => value.fmt(f),
+            JsonValue::Number(ref value)  => value.fmt(f),
+            JsonValue::Boolen(ref value) => value.fmt(f),
+            JsonValue::Null               => f.write_str("null"),
+            _                             => f.write_str(&self.dump())
+        }
+    }
 }
 
 impl From<Vec<JsonValue>> for JsonValue {

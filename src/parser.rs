@@ -111,7 +111,7 @@ pub fn parse(json: &str) -> JsonResult<JsonValue> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{array, object, stringify};
+    use crate::{array, object};
 
     use super::*;
 
@@ -236,6 +236,14 @@ mod tests {
     #[test]
     fn parse_unicode() {
         let s = "{\"code\":1000,\"message\":\"\\u67e5\\u8be2\\u6210\\u529f\",\"data\":\"\\u5317\\u4eac\\u9996\\u90fd\"}";
+        let ret = parse(s).unwrap();
+
+        println!("{:?}", ret);
+    }
+    
+    #[test]
+    fn parse_one_unicode() {
+        let s = "\"\\u67e5 \\/12\"";
         let ret = parse(s).unwrap();
 
         println!("{:?}", ret);

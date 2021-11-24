@@ -1,6 +1,6 @@
-use std::{iter::Peekable, str::Bytes};
+use std::{char::decode_utf16, iter::Peekable, str::Bytes};
 
-use crate::{error::JsonError,  JsonResult};
+use crate::{error::JsonError, JsonResult};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -70,24 +70,34 @@ impl<'a> Tokenizer<'a> {
         Ok(token)
     }
 
+    fn expect_next_str(&mut self, str: &[u8]) -> JsonResult<()> {
+        for &espect in str {
+            let ch = self.next_byte()?;
+            if ch != espect {
+                return Err(JsonError::unexpected_character(ch));
+            }
+        }
+        Ok(())
+    }
+
     fn read_string(&mut self) -> JsonResult<Token> {
         self.buffer.clear();
         loop {
             let ch = self.next_byte()?;
             match ch {
                 b'"' => break,
-                b'\\' => self.read_escaped_chr(),
+                b'\\' => self.read_escaped_chr()?,
                 _ => self.buffer.push(ch),
             }
         }
         match String::from_utf8(self.buffer.clone()) {
             Ok(s) => Ok(Token::String(s)),
-            Err(e) => return Err(JsonError::parsing_faild(e.to_string())),
+            Err(e) => return Err(JsonError::ParsingFailed(e.to_string())),
         }
     }
 
     //escape '"' '\' '/' 'b' 'f' 'n' 'r' 't' 'u' hex hex hex hex
-    fn read_escaped_chr(&mut self) {
+    fn read_escaped_chr(&mut self) -> JsonResult<()> {
         // self.buffer.push(b'\\');
         if let Ok(ch) = self.next_byte() {
             match ch {
@@ -96,34 +106,74 @@ impl<'a> Tokenizer<'a> {
                 b'n' => self.buffer.push(b'\n'),
                 b'r' => self.buffer.push(b'\r'),
                 b't' => self.buffer.push(b'\t'),
-                b'u' => self.read_codepoint(),
+                b'u' => self.read_unicode()?,
                 _ => self.buffer.push(ch),
             };
         }
+        Ok(())
     }
 
-    fn read_hex(&mut self) -> JsonResult<u32> {
+    fn read_unicode(&mut self) -> JsonResult<()> {
+        let codepoint = self.read_hex_codepoint()?;
+
+        let unicode = match char::try_from(codepoint as u32) {
+            Ok(code) => code,
+            Err(_) => {
+                self.expect_next_str(b"\\u")?;
+                let next_codepoint = self.read_hex_codepoint()?;
+                // println!("codepoint = {:x}", codepoint);
+                // println!("next_codepoint = {:x}", next_codepoint);
+                match decode_utf16([codepoint, next_codepoint].iter().cloned()).next() {
+                    Some(Ok(code)) => code,
+                    _ => return Err(JsonError::parsing_faild("parsing unicode error")),
+                }
+            }
+        };
+        self.buffer
+            .extend_from_slice(unicode.encode_utf8(&mut [0_u8; 4]).as_bytes());
+
+        Ok(())
+    }
+
+    fn read_hex_codepoint(&mut self) -> JsonResult<u16> {
+        Ok(self.read_hexdec_digit()? << 12
+            | self.read_hexdec_digit()? << 8
+            | self.read_hexdec_digit()? << 4
+            | self.read_hexdec_digit()?)
+    }
+
+    fn read_hexdec_digit(&mut self) -> JsonResult<u16> {
         let ch = self.next_byte()?;
         Ok(match ch {
             b'0'..=b'9' => (ch - b'0'),
             b'a'..=b'f' => (ch + 10 - b'a'),
             b'A'..=b'F' => (ch + 10 - b'A'),
-            ch => return Err(JsonError::unexpected_character(ch)),
-        } as u32)
+            val => return Err(JsonError::unexpected_character(val)),
+        } as u16)
     }
 
-    fn read_codepoint(&mut self) {
-        let codepoint = self.read_hex().unwrap() << 12
-            | self.read_hex().unwrap() << 8
-            | self.read_hex().unwrap() << 4
-            | self.read_hex().unwrap();
+    // fn read_codepoint(&mut self) {
+    //     let codepoint = self.read_hex().unwrap() << 12
+    //         | self.read_hex().unwrap() << 8
+    //         | self.read_hex().unwrap() << 4
+    //         | self.read_hex().unwrap();
 
-        let ch = char::from_u32(codepoint).ok_or(JsonError::ParsingFailed("utf8".to_string()));
-        let mut str = String::new();
-        str.push(ch.unwrap());
+    //     let ch = char::from_u32(codepoint).ok_or(JsonError::ParsingFailed("utf8".to_string()));
+    //     let mut str = String::new();
+    //     str.push(ch.unwrap());
 
-        self.buffer.extend_from_slice(str.as_bytes());
-    }
+    //     self.buffer.extend_from_slice(str.as_bytes());
+    // }
+
+    // fn read_hex(&mut self) -> JsonResult<u32> {
+    //     let ch = self.next_byte()?;
+    //     Ok(match ch {
+    //         b'0'..=b'9' => (ch - b'0'),
+    //         b'a'..=b'f' => (ch + 10 - b'a'),
+    //         b'A'..=b'F' => (ch + 10 - b'A'),
+    //         ch => return Err(JsonError::unexpected_character(ch)),
+    //     } as u32)
+    // }
 
     fn read_number(&mut self, chr: u8) -> JsonResult<Token> {
         self.buffer.clear();
@@ -191,7 +241,10 @@ mod test {
             Tokenizer::new(r#"   -1.23E4 "#).next().unwrap(),
             Token::Number(-12300.0)
         );
-        assert_eq!(Tokenizer::new("1.23e4").next().unwrap(), Token::Number(12300.0));
+        assert_eq!(
+            Tokenizer::new("1.23e4").next().unwrap(),
+            Token::Number(12300.0)
+        );
         assert_eq!(
             Tokenizer::new("-1.23e-4").next().unwrap(),
             Token::Number(-0.000123)
